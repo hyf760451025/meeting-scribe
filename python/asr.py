@@ -189,6 +189,7 @@ class ASRClient:
             },
         }
 
+        logger.info(f'ASR 连接参数: app_id={self.app_id[:4]}**** resource_id={self.resource_id}')
         try:
             async with ws_connect(
                 ASR_WS_URL,
