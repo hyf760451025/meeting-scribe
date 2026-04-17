@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 import websockets
+from websockets.server import serve
 from http_server import start_http_server
 from asr import ASRClient
 from llm import generate_summary
@@ -108,11 +109,12 @@ async def main():
     logger.info('MeetingScribe 后端启动中...')
 
     # 启动 HTTP server（处理 Obsidian 同步、设置）
-    http_task = asyncio.create_task(start_http_server())
+    asyncio.create_task(start_http_server())
 
     # 启动 WebSocket server
     logger.info('WebSocket 服务启动在 ws://localhost:8767')
-    async with websockets.serve(handle_client, 'localhost', 8767):
+    async with serve(handle_client, 'localhost', 8767):
+        logger.info('后端全部就绪，等待前端连接...')
         await asyncio.Future()  # 永久运行
 
 

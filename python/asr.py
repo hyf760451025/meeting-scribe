@@ -13,7 +13,8 @@ import gzip
 import struct
 import numpy as np
 import sounddevice as sd
-import websockets
+from websockets.client import connect as ws_connect
+import websockets.exceptions
 from typing import Callable, Optional
 
 logger = logging.getLogger('asr')
@@ -193,7 +194,7 @@ class ASRClient:
         }
 
         try:
-            async with websockets.connect(
+            async with ws_connect(
                 ASR_WS_URL,
                 additional_headers=headers,
                 ping_interval=20,
