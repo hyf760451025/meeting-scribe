@@ -20,8 +20,8 @@ from websockets.client import connect as ws_connect
 logger = logging.getLogger('asr')
 
 # ─── 接口地址 ─────────────────────────────────────────────────────────────────
-# 双向流式优化版（推荐，性能最优）
-ASR_WS_URL = 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async'
+# 使用普通双向流式接口（响应更快，utterance 直接含 text）
+ASR_WS_URL = 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel'
 
 # ─── 音频参数 ─────────────────────────────────────────────────────────────────
 SAMPLE_RATE   = 16000
@@ -185,7 +185,7 @@ class ASRClient:
                 'enable_punc':     True,
                 'enable_ddc':      True,
                 'show_utterances': True,
-                'result_type':     'single',  # 增量返回，适合实时显示
+                'result_type':     'full',
             },
         }
 
@@ -269,10 +269,15 @@ class ASRClient:
                 continue
 
             try:
-                utterances = result.get('result', {}).get('utterances', [])
+                res = result.get('result', {})
+                utterances = res.get('utterances', [])
                 logger.debug(f'ASR utterances 数量: {len(utterances)}')
+
                 for utt in utterances:
                     text = utt.get('text', '').strip()
+                    if not text:
+                        # 兜底：用顶层 result.text
+                        text = res.get('text', '').strip()
                     if not text:
                         continue
                     is_final = utt.get('definite', False)
