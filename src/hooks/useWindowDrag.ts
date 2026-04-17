@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect } from 'react'
 
 // 扩展 Window 类型，适配 Electron preload 注入的 API
 declare global {
@@ -12,43 +12,19 @@ declare global {
   }
 }
 
+/**
+ * 用 CSS -webkit-app-region: drag 实现原生拖拽
+ * 比 JS 模拟更稳定，不会触发 resize
+ */
 export function useWindowDrag() {
-  const isDragging = useRef(false)
-  const startPos = useRef({ x: 0, y: 0 })
-
-  const onMouseDown = useCallback((e: MouseEvent) => {
-    // 只响应主按键，且目标不是交互元素
-    const target = e.target as HTMLElement
-    if (
-      e.button !== 0 ||
-      target.closest('button, a, input, textarea, select, [data-no-drag]')
-    ) return
-
-    isDragging.current = true
-    startPos.current = { x: e.screenX, y: e.screenY }
-    e.preventDefault()
-  }, [])
-
-  const onMouseMove = useCallback((e: MouseEvent) => {
-    if (!isDragging.current) return
-    const deltaX = e.screenX - startPos.current.x
-    const deltaY = e.screenY - startPos.current.y
-    startPos.current = { x: e.screenX, y: e.screenY }
-    window.electronAPI?.moveWindow({ deltaX, deltaY })
-  }, [])
-
-  const onMouseUp = useCallback(() => {
-    isDragging.current = false
-  }, [])
-
   useEffect(() => {
-    document.addEventListener('mousedown', onMouseDown)
-    document.addEventListener('mousemove', onMouseMove)
-    document.addEventListener('mouseup', onMouseUp)
+    // 给 body 加 drag 区域，按钮等交互元素通过 no-drag class 排除
+    document.body.style.setProperty('-webkit-app-region', 'drag')
+    document.body.style.setProperty('user-select', 'none')
+
     return () => {
-      document.removeEventListener('mousedown', onMouseDown)
-      document.removeEventListener('mousemove', onMouseMove)
-      document.removeEventListener('mouseup', onMouseUp)
+      document.body.style.removeProperty('-webkit-app-region')
+      document.body.style.removeProperty('user-select')
     }
-  }, [onMouseDown, onMouseMove, onMouseUp])
+  }, [])
 }

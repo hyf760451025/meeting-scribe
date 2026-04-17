@@ -39,10 +39,10 @@ function createWindow() {
     height: 160,
     minWidth: 400,
     minHeight: 100,
-    frame: false,               // 无边框
-    transparent: true,          // 透明背景
-    alwaysOnTop: true,          // 始终置顶
-    resizable: true,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    resizable: false,          // 禁止 resize，避免拖拽时窗口变大
     skipTaskbar: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -99,21 +99,9 @@ function buildContextMenu() {
 }
 
 // ─── IPC 通信 ────────────────────────────────────────────────────────────────
-// 窗口拖动（无边框窗口需要手动实现）
-ipcMain.on('window-move', (_, { deltaX, deltaY }) => {
-  if (!mainWindow) return
-  const [x, y] = mainWindow.getPosition()
-  mainWindow.setPosition(x + deltaX, y + deltaY)
-})
-
-// 获取窗口大小（供前端使用）
+// 获取窗口大小
 ipcMain.handle('get-window-size', () => {
   return mainWindow?.getSize() ?? [720, 160]
-})
-
-// 调整窗口高度（展开/收起）
-ipcMain.on('resize-window', (_, { width, height }) => {
-  mainWindow?.setSize(width, height, true)
 })
 
 // ─── App 生命周期 ────────────────────────────────────────────────────────────

@@ -1,3 +1,8 @@
+/* Electron 原生拖拽：按钮、输入框等交互元素排除拖拽区域 */
+button, a, input, textarea, select, [data-no-drag] {
+  -webkit-app-region: no-drag;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
