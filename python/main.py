@@ -24,10 +24,12 @@ from llm import generate_summary
 from config import config
 
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format='[%(asctime)s] %(levelname)s %(name)s: %(message)s',
     datefmt='%H:%M:%S',
 )
+# 屏蔽 websockets 内部的 debug 日志
+logging.getLogger('websockets').setLevel(logging.WARNING)
 logger = logging.getLogger('main')
 
 # 当前活跃的 ASR 客户端

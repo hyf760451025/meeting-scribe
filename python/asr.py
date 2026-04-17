@@ -205,9 +205,7 @@ class ASRClient:
 
                 # 发送初始化请求
                 init_data = _pack_json(init_payload)
-                logger.debug(f'发送初始化包，字节长度: {len(init_data)}, 前8字节: {init_data[:8].hex()}')
                 await ws.send(init_data)
-                logger.debug('初始化包已发送，等待服务端响应...')
 
                 # 并发：发送音频 + 接收结果
                 await asyncio.gather(
@@ -231,7 +229,6 @@ class ASRClient:
                     self._audio_queue.get(), timeout=0.5
                 )
                 await ws.send(_pack_audio(pcm))
-                # 同步推送音量给前端（text 为空仅更新音量）
                 self.on_interim('', volume)
             except asyncio.TimeoutError:
                 continue
@@ -240,7 +237,7 @@ class ASRClient:
                     logger.error(f'发送音频异常: {e}')
                 break
 
-        # 停止时发送最后一包（空音频 + last flag）
+        # 停止时发送最后一包
         try:
             await ws.send(_pack_audio(b'', is_last=True))
         except Exception:
@@ -248,18 +245,13 @@ class ASRClient:
 
     async def _recv_results(self, ws):
         """接收并解析识别结果"""
-        logger.debug('_recv_results 开始监听...')
         async for raw in ws:
             if not self.running:
                 break
             data = raw if isinstance(raw, bytes) else raw.encode()
             result = _parse_response(data)
 
-            # 打印原始返回，排查问题
-            logger.debug(f'ASR 原始响应: {result}')
-
             if not result:
-                logger.warning(f'ASR 响应解析失败，原始字节长度: {len(data)}')
                 continue
 
             # 检查错误码
@@ -274,12 +266,9 @@ class ASRClient:
             try:
                 res = result.get('result', {})
                 utterances = res.get('utterances', [])
-                logger.debug(f'ASR utterances 数量: {len(utterances)}')
-
                 for utt in utterances:
                     text = utt.get('text', '').strip()
                     if not text:
-                        # 兜底：用顶层 result.text
                         text = res.get('text', '').strip()
                     if not text:
                         continue
@@ -290,4 +279,4 @@ class ASRClient:
                     else:
                         self.on_interim(text, 0)
             except Exception as e:
-                logger.debug(f'解析结果异常: {e}')
+                logger.warning(f'解析结果异常: {e}')
