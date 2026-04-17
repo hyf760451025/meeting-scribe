@@ -39,6 +39,11 @@ export default function App() {
   // 处理后端消息
   const handleBackendMessage = useCallback((msg: any) => {
     switch (msg.type) {
+      case 'connected':
+      case 'pong':
+        // 握手确认 / 心跳，忽略
+        break
+
       case 'asr_interim':
         // 实时中间结果（可能会更新）
         setInterimText(msg.text)

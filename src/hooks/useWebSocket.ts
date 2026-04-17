@@ -8,44 +8,73 @@ interface UseWebSocketOptions {
 }
 
 export function useWebSocket(url: string, options: UseWebSocketOptions = {}) {
-  const { onMessage, onOpen, onClose, reconnectInterval = 2000 } = options
+  const { onMessage, onOpen, onClose, reconnectInterval = 3000 } = options
   const ws = useRef<WebSocket | null>(null)
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const mountedRef = useRef(true)
   const [connected, setConnected] = useState(false)
 
   const connect = useCallback(() => {
-    try {
-      ws.current = new WebSocket(url)
+    if (!mountedRef.current) return
+    // 清理旧连接
+    if (ws.current) {
+      ws.current.onopen = null
+      ws.current.onmessage = null
+      ws.current.onclose = null
+      ws.current.onerror = null
+      ws.current.close()
+      ws.current = null
+    }
 
-      ws.current.onopen = () => {
+    try {
+      const socket = new WebSocket(url)
+      ws.current = socket
+
+      socket.onopen = () => {
+        if (!mountedRef.current) return
         setConnected(true)
         onOpen?.()
       }
 
-      ws.current.onmessage = (e) => {
+      socket.onmessage = (e) => {
+        if (!mountedRef.current) return
         onMessage?.(e.data)
       }
 
-      ws.current.onclose = () => {
+      socket.onclose = () => {
+        if (!mountedRef.current) return
         setConnected(false)
         onClose?.()
-        // 自动重连
-        reconnectTimer.current = setTimeout(connect, reconnectInterval)
+        // 延迟重连
+        reconnectTimer.current = setTimeout(() => {
+          if (mountedRef.current) connect()
+        }, reconnectInterval)
       }
 
-      ws.current.onerror = () => {
-        ws.current?.close()
+      socket.onerror = () => {
+        // onerror 后会触发 onclose，在 onclose 里处理重连
+        socket.close()
       }
-    } catch (e) {
-      reconnectTimer.current = setTimeout(connect, reconnectInterval)
+    } catch {
+      reconnectTimer.current = setTimeout(() => {
+        if (mountedRef.current) connect()
+      }, reconnectInterval)
     }
-  }, [url, onMessage, onOpen, onClose, reconnectInterval])
+  }, [url, reconnectInterval])
 
   useEffect(() => {
+    mountedRef.current = true
     connect()
     return () => {
+      mountedRef.current = false
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current)
-      ws.current?.close()
+      if (ws.current) {
+        ws.current.onopen = null
+        ws.current.onmessage = null
+        ws.current.onclose = null
+        ws.current.onerror = null
+        ws.current.close()
+      }
     }
   }, [connect])
 

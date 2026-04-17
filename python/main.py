@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 import websockets
+import websockets.exceptions
 from websockets.server import serve
 from http_server import start_http_server
 from asr import ASRClient
@@ -32,6 +33,12 @@ async def handle_client(websocket):
     client_addr = websocket.remote_address
     logger.info(f'前端已连接: {client_addr}')
 
+    # 发送一个 hello 确认连接成功
+    try:
+        await websocket.send(json.dumps({'type': 'connected'}, ensure_ascii=False))
+    except Exception:
+        return
+
     async def push(data: dict):
         """向前端推送消息"""
         try:
@@ -48,8 +55,10 @@ async def handle_client(websocket):
 
             action = msg.get('action')
 
-            if action == 'start':
-                # 开始录音 + ASR
+            if action == 'ping':
+                await push({'type': 'pong'})
+
+            elif action == 'start':
                 if asr_client and asr_client.running:
                     continue
                 logger.info('开始录音...')
@@ -69,14 +78,12 @@ async def handle_client(websocket):
                 asyncio.create_task(asr_client.start())
 
             elif action == 'stop':
-                # 停止录音
                 logger.info('停止录音')
                 if asr_client:
                     await asr_client.stop()
                     asr_client = None
 
             elif action == 'summarize':
-                # 生成智能总结
                 transcript = msg.get('transcript', '')
                 if not transcript.strip():
                     await push({'type': 'error', 'message': '逐字稿为空，无法生成总结'})
@@ -108,14 +115,14 @@ async def handle_client(websocket):
 async def main():
     logger.info('MeetingScribe 后端启动中...')
 
-    # 启动 HTTP server（处理 Obsidian 同步、设置）
+    # 启动 HTTP server
     asyncio.create_task(start_http_server())
 
     # 启动 WebSocket server
     logger.info('WebSocket 服务启动在 ws://localhost:8767')
     async with serve(handle_client, 'localhost', 8767):
         logger.info('后端全部就绪，等待前端连接...')
-        await asyncio.Future()  # 永久运行
+        await asyncio.Future()
 
 
 if __name__ == '__main__':
