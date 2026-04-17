@@ -241,9 +241,10 @@ class ASRClient:
 
     async def _recv_results(self, ws):
         """接收并解析识别结果"""
-        # key: start_time, value: 上次推送的文字
-        # 用于判断同一个 utterance 是否有新内容
-        utterance_cache: dict[int, str] = {}
+        import time
+        last_interim_text = ''
+        last_final_text   = ''
+        last_final_time   = 0.0  # 上次 final 的时间戳
 
         async for raw in ws:
             if not self.running:
@@ -264,6 +265,7 @@ class ASRClient:
             try:
                 res = result.get('result', {})
                 utterances = res.get('utterances', [])
+
                 for utt in utterances:
                     text = utt.get('text', '').strip()
                     if not text:
@@ -272,22 +274,22 @@ class ASRClient:
                         continue
 
                     is_final = utt.get('definite', False)
-                    start_time = utt.get('start_time', -1)
-
-                    # 同一个 utterance（按 start_time 区分），文字没变就跳过
-                    if utterance_cache.get(start_time) == text:
-                        continue
-
-                    utterance_cache[start_time] = text
+                    now = time.time()
 
                     if is_final:
+                        # 同样文字在 500ms 内重复 → 服务端重发，跳过
+                        if text == last_final_text and (now - last_final_time) < 0.5:
+                            continue
+                        last_final_text = text
+                        last_final_time = now
+                        last_interim_text = ''
                         logger.info(f'ASR [final]: {text}')
-                        # final 后清理这个 utterance 的缓存
-                        utterance_cache.pop(start_time, None)
                         self.on_final(text)
                     else:
-                        logger.info(f'ASR [interim]: {text}')
-                        self.on_interim(text, 0)
+                        if text != last_interim_text:
+                            last_interim_text = text
+                            logger.info(f'ASR [interim]: {text}')
+                            self.on_interim(text, 0)
 
             except Exception as e:
                 logger.warning(f'解析结果异常: {e}')
