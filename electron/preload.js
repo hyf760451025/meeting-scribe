@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron')
 contextBridge.exposeInMainWorld('electronAPI', {
   // 窗口控制
   minimizeWindow: () => ipcRenderer.send('minimize-window'),
+  closeWindow: () => ipcRenderer.send('close-window'),
   resizeWindow: (size) => ipcRenderer.send('resize-window', size),
   getWindowSize: () => ipcRenderer.invoke('get-window-size'),
 

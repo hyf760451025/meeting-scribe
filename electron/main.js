@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, Tray, nativeImage } = require('electron')
 const path = require('path')
 const { spawn, execSync } = require('child_process')
 const net = require('net')
@@ -7,6 +7,7 @@ const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 
 let mainWindow = null
 let pythonProcess = null
+let tray = null
 
 // ─── 端口检查 & 清理 ─────────────────────────────────────────────────────────
 function isPortInUse(port) {
@@ -143,6 +144,41 @@ function createWindow() {
   })
 }
 
+// ─── 系统托盘 ────────────────────────────────────────────────────────────────
+function createTray() {
+  // 用一个 1x1 的空图标，Windows 托盘需要图标
+  const icon = nativeImage.createEmpty()
+  tray = new Tray(icon)
+  tray.setToolTip('MeetingScribe')
+
+  const trayMenu = Menu.buildFromTemplate([
+    {
+      label: '显示窗口',
+      click: () => {
+        mainWindow?.show()
+        mainWindow?.focus()
+      },
+    },
+    { type: 'separator' },
+    {
+      label: '退出',
+      click: () => app.quit(),
+    },
+  ])
+
+  tray.setContextMenu(trayMenu)
+
+  // 单击托盘图标恢复窗口
+  tray.on('click', () => {
+    if (mainWindow?.isVisible()) {
+      mainWindow.hide()
+    } else {
+      mainWindow?.show()
+      mainWindow?.focus()
+    }
+  })
+}
+
 // ─── 右键菜单 ────────────────────────────────────────────────────────────────
 function buildContextMenu() {
   return Menu.buildFromTemplate([
@@ -186,15 +222,21 @@ ipcMain.handle('get-window-size', () => {
 })
 
 ipcMain.on('minimize-window', () => {
-  mainWindow?.minimize()
+  mainWindow?.hide()  // 隐藏到托盘，不是任务栏最小化
+})
+
+ipcMain.on('close-window', () => {
+  app.quit()
 })
 
 // ─── App 生命周期 ────────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
-  // 先清理可能残留的端口占用
   await cleanupPorts()
   startPython()
-  setTimeout(createWindow, 1500)
+  setTimeout(() => {
+    createWindow()
+    createTray()
+  }, 1500)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

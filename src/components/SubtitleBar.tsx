@@ -81,14 +81,28 @@ export default function SubtitleBar({
               开始
             </button>
           )}
-          {/* 最小化按钮 */}
+
+          {/* 分隔线 */}
+          <div className="w-px h-3 bg-white/10 mx-0.5" />
+
+          {/* 最小化到托盘（黄色） */}
           <button
             data-no-drag
             onClick={() => window.electronAPI?.minimizeWindow()}
-            className="w-6 h-6 flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-white/10 transition-colors text-base leading-none"
-            title="最小化"
+            title="最小化到托盘"
+            className="w-3 h-3 rounded-full bg-yellow-400/80 hover:bg-yellow-400 transition-colors flex items-center justify-center group"
           >
-            –
+            <span className="hidden group-hover:block text-[8px] text-yellow-900 leading-none font-bold">–</span>
+          </button>
+
+          {/* 关闭（红色） */}
+          <button
+            data-no-drag
+            onClick={() => window.electronAPI?.closeWindow()}
+            title="退出"
+            className="w-3 h-3 rounded-full bg-red-400/80 hover:bg-red-500 transition-colors flex items-center justify-center group"
+          >
+            <span className="hidden group-hover:block text-[8px] text-red-900 leading-none font-bold">✕</span>
           </button>
         </div>
       </div>
