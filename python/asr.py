@@ -20,7 +20,8 @@ from websockets.client import connect as ws_connect
 logger = logging.getLogger('asr')
 
 # ─── 接口地址 ─────────────────────────────────────────────────────────────────
-ASR_WS_URL = 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel'
+# 双向流式优化版：只有结果变化时才推送，解决重复刷新问题
+ASR_WS_URL = 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async'
 
 # ─── 音频参数 ─────────────────────────────────────────────────────────────────
 SAMPLE_RATE   = 16000
@@ -183,12 +184,13 @@ class ASRClient:
                 'channel': CHANNELS,
             },
             'request': {
-                'model_name':      'bigmodel',
-                'enable_itn':      True,
-                'enable_punc':     True,
-                'enable_ddc':      True,
-                'show_utterances': True,
-                'result_type':     'single',  # 增量返回，避免重复推同一句话
+                'model_name':        'bigmodel',
+                'enable_itn':        True,
+                'enable_punc':       True,
+                'enable_ddc':        True,
+                'show_utterances':   True,
+                'result_type':       'single',
+                'enable_nonstream':  True,   # 开启二遍识别，async 接口才有文字输出
             },
         }
 
@@ -241,10 +243,8 @@ class ASRClient:
 
     async def _recv_results(self, ws):
         """接收并解析识别结果"""
-        import time
         last_interim_text = ''
         last_final_text   = ''
-        last_final_time   = 0.0  # 上次 final 的时间戳
 
         async for raw in ws:
             if not self.running:
@@ -274,17 +274,13 @@ class ASRClient:
                         continue
 
                     is_final = utt.get('definite', False)
-                    now = time.time()
 
                     if is_final:
-                        # 同样文字在 500ms 内重复 → 服务端重发，跳过
-                        if text == last_final_text and (now - last_final_time) < 0.5:
-                            continue
-                        last_final_text = text
-                        last_final_time = now
-                        last_interim_text = ''
-                        logger.info(f'ASR [final]: {text}')
-                        self.on_final(text)
+                        if text != last_final_text:
+                            last_final_text = text
+                            last_interim_text = ''
+                            logger.info(f'ASR [final]: {text}')
+                            self.on_final(text)
                     else:
                         if text != last_interim_text:
                             last_interim_text = text
