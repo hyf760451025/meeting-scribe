@@ -26,7 +26,7 @@ export default function App() {
   const [volume, setVolume] = useState(0)
 
   // WebSocket 连接到 Python 后端
-  const { sendMessage, connected } = useWebSocket('ws://localhost:8765', {
+  const { sendMessage, connected } = useWebSocket('ws://localhost:8767', {
     onMessage: (data) => {
       const msg = JSON.parse(data)
       handleBackendMessage(msg)

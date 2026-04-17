@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 MeetingScribe Python 后端
-- WebSocket Server (port 8765): 与 Electron 前端通信，处理 ASR 流式转写
+- WebSocket Server (port 8767): 与 Electron 前端通信，处理 ASR 流式转写
 - HTTP Server (port 8766): 处理同步 Obsidian、设置更新等请求
 """
 
@@ -111,8 +111,8 @@ async def main():
     http_task = asyncio.create_task(start_http_server())
 
     # 启动 WebSocket server
-    logger.info('WebSocket 服务启动在 ws://localhost:8765')
-    async with websockets.serve(handle_client, 'localhost', 8765):
+    logger.info('WebSocket 服务启动在 ws://localhost:8767')
+    async with websockets.serve(handle_client, 'localhost', 8767):
         await asyncio.Future()  # 永久运行
 
 
