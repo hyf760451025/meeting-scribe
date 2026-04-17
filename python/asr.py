@@ -173,7 +173,7 @@ class ASRClient:
                 'uid': str(uuid.uuid4()),
             },
             'audio': {
-                'format':  'raw',
+                'format':  'pcm',
                 'codec':   'raw',
                 'rate':    SAMPLE_RATE,
                 'bits':    16,
