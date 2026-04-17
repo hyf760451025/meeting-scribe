@@ -201,7 +201,10 @@ class ASRClient:
                 logger.info(f'豆包 ASR 已连接 [connect_id={connect_id}]')
 
                 # 发送初始化请求
-                await ws.send(_pack_json(init_payload))
+                init_data = _pack_json(init_payload)
+                logger.debug(f'发送初始化包，字节长度: {len(init_data)}, 前8字节: {init_data[:8].hex()}')
+                await ws.send(init_data)
+                logger.debug('初始化包已发送，等待服务端响应...')
 
                 # 并发：发送音频 + 接收结果
                 await asyncio.gather(
@@ -242,6 +245,7 @@ class ASRClient:
 
     async def _recv_results(self, ws):
         """接收并解析识别结果"""
+        logger.debug('_recv_results 开始监听...')
         async for raw in ws:
             if not self.running:
                 break
