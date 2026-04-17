@@ -168,6 +168,10 @@ function buildContextMenu() {
       label: '⚙️  设置',
       click: () => mainWindow?.webContents.send('menu-action', 'settings'),
     },
+    {
+      label: '─  最小化',
+      click: () => mainWindow?.minimize(),
+    },
     { type: 'separator' },
     {
       label: '✕  退出',
@@ -179,6 +183,10 @@ function buildContextMenu() {
 // ─── IPC 通信 ────────────────────────────────────────────────────────────────
 ipcMain.handle('get-window-size', () => {
   return mainWindow?.getSize() ?? [720, 160]
+})
+
+ipcMain.on('minimize-window', () => {
+  mainWindow?.minimize()
 })
 
 // ─── App 生命周期 ────────────────────────────────────────────────────────────

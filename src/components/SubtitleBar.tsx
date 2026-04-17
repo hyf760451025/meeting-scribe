@@ -81,6 +81,15 @@ export default function SubtitleBar({
               开始
             </button>
           )}
+          {/* 最小化按钮 */}
+          <button
+            data-no-drag
+            onClick={() => window.electronAPI?.minimizeWindow()}
+            className="w-6 h-6 flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-white/10 transition-colors text-base leading-none"
+            title="最小化"
+          >
+            –
+          </button>
         </div>
       </div>
 
