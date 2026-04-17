@@ -247,7 +247,12 @@ class ASRClient:
                 break
             data = raw if isinstance(raw, bytes) else raw.encode()
             result = _parse_response(data)
+
+            # 打印原始返回，排查问题
+            logger.debug(f'ASR 原始响应: {result}')
+
             if not result:
+                logger.warning(f'ASR 响应解析失败，原始字节长度: {len(data)}')
                 continue
 
             # 检查错误码
@@ -261,11 +266,13 @@ class ASRClient:
 
             try:
                 utterances = result.get('result', {}).get('utterances', [])
+                logger.debug(f'ASR utterances 数量: {len(utterances)}')
                 for utt in utterances:
                     text = utt.get('text', '').strip()
                     if not text:
                         continue
                     is_final = utt.get('definite', False)
+                    logger.info(f'ASR {"[final]" if is_final else "[interim]"}: {text}')
                     if is_final:
                         self.on_final(text)
                     else:
