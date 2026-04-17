@@ -145,6 +145,9 @@ class ASRClient:
             pcm = (indata * 32767).astype(np.int16).tobytes()
             loop.call_soon_threadsafe(self._audio_queue.put_nowait, (pcm, volume))
 
+        # 打印可用音频设备，帮助排查
+        logger.info(f'默认输入设备: {sd.query_devices(kind="input")["name"]}')
+
         with sd.InputStream(
             samplerate=SAMPLE_RATE,
             channels=CHANNELS,
