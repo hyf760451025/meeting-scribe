@@ -1,7 +1,7 @@
 """
 豆包大模型流式语音识别 (ASR)
 文档：https://www.volcengine.com/docs/6561/1354869
-接口：wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async（双向流式优化版）
+接口：wss://openspeech.bytedance.com/api/v3/sauc/bigmodel
 """
 
 import asyncio
@@ -20,14 +20,13 @@ from websockets.client import connect as ws_connect
 logger = logging.getLogger('asr')
 
 # ─── 接口地址 ─────────────────────────────────────────────────────────────────
-# 使用普通双向流式接口（响应更快，utterance 直接含 text）
 ASR_WS_URL = 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel'
 
 # ─── 音频参数 ─────────────────────────────────────────────────────────────────
 SAMPLE_RATE   = 16000
 CHANNELS      = 1
-CHUNK_MS      = 200   # 文档推荐双向流式用 200ms
-CHUNK_SAMPLES = int(SAMPLE_RATE * CHUNK_MS / 1000)  # 3200 samples
+CHUNK_MS      = 100   # 改为 100ms，降低延迟
+CHUNK_SAMPLES = int(SAMPLE_RATE * CHUNK_MS / 1000)  # 1600 samples
 
 # ─── 二进制协议常量 ───────────────────────────────────────────────────────────
 PROTOCOL_VERSION    = 0b0001
@@ -274,6 +273,8 @@ class ASRClient:
                         continue
                     is_final = utt.get('definite', False)
                     logger.info(f'ASR {"[final]" if is_final else "[interim]"}: {text}')
+                    # definite=true 作为最终确认推 final
+                    # definite=false 推 interim 实时显示
                     if is_final:
                         self.on_final(text)
                     else:

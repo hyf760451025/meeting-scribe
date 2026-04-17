@@ -55,20 +55,21 @@ export default function App() {
         break
 
       case 'asr_final':
-        // 最终确认文字，加入逐字稿
+        // 最终确认文字，加入逐字稿，清空 interim
         setInterimText('')
         if (msg.text?.trim()) {
-          setMessages((prev) => [
-            ...prev,
-            {
+          setMessages((prev) => {
+            // 避免和上一条重复
+            const last = prev[prev.length - 1]
+            if (last?.text === msg.text) return prev
+            return [...prev, {
               id: Date.now().toString(),
               text: msg.text,
               isFinal: true,
               timestamp: Date.now(),
-            },
-          ])
+            }]
+          })
         }
-        setVolume(0)
         break
 
       case 'volume':
@@ -125,7 +126,18 @@ export default function App() {
   const handleStop = useCallback(() => {
     if (status !== 'recording') return
     setStatus('idle')
-    setInterimText('')
+    // 停止时把当前 interimText 保存到 messages
+    setInterimText(prev => {
+      if (prev.trim()) {
+        setMessages(msgs => [...msgs, {
+          id: Date.now().toString(),
+          text: prev,
+          isFinal: false,
+          timestamp: Date.now(),
+        }])
+      }
+      return ''
+    })
     setVolume(0)
     sendMessage(JSON.stringify({ action: 'stop' }))
   }, [status, sendMessage])
