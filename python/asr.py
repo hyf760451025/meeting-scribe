@@ -192,7 +192,7 @@ class ASRClient:
         try:
             async with ws_connect(
                 ASR_WS_URL,
-                additional_headers=headers,
+                extra_headers=headers,
                 ping_interval=20,
                 open_timeout=10,
             ) as ws:
