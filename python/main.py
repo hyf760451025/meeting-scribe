@@ -95,9 +95,9 @@ async def handle_client(websocket):
                     summary = await generate_summary(
                         transcript=transcript,
                         template=config.summary_template,
-                        api_key=config.llm_api_key,
-                        base_url=config.llm_base_url,
-                        model=config.llm_model,
+                        api_key=config.ark_api_key,
+                        base_url=config.ark_base_url,
+                        model=config.ark_endpoint_id,
                     )
                     await push({'type': 'summary_result', 'text': summary})
                 except Exception as e:

@@ -24,9 +24,9 @@ SYSTEM_PROMPT = """你是一个专业的会议记录助手。
 async def generate_summary(
     transcript: str,
     template: str,
-    api_key: str,
-    base_url: str,
-    model: str,
+    api_key: str,      # ARK_API_KEY
+    base_url: str,     # ARK_BASE_URL
+    model: str,        # ARK_ENDPOINT_ID
 ) -> str:
     """调用豆包 Responses API 生成会议总结"""
 
