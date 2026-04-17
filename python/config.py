@@ -102,14 +102,16 @@ class Config:
         self._print_status()
 
     def _print_status(self):
+        ok = '[OK]'
+        no = '[--]'
         print('[Config] 配置加载完成:')
-        print(f'  VOLCENGINE_APP_ID      : {"✓" if self.volcengine_app_id else "✗ 未配置"}')
-        print(f'  VOLCENGINE_ACCESS_KEY  : {"✓" if self.volcengine_access_key else "✗ 未配置"}')
+        print(f'  VOLCENGINE_APP_ID      : {ok if self.volcengine_app_id else no + " 未配置"}')
+        print(f'  VOLCENGINE_ACCESS_KEY  : {ok if self.volcengine_access_key else no + " 未配置"}')
         print(f'  VOLCENGINE_RESOURCE_ID : {self.volcengine_resource_id}')
-        print(f'  ARK_API_KEY            : {"✓" if self.ark_api_key else "✗ 未配置"}')
-        print(f'  ARK_MODEL              : {self.ark_model or "✗ 未配置"}')
+        print(f'  ARK_API_KEY            : {ok if self.ark_api_key else no + " 未配置"}')
+        print(f'  ARK_MODEL              : {self.ark_model or no + " 未配置"}')
         print(f'  ARK_BASE_URL           : {self.ark_base_url}')
-        print(f'  OBSIDIAN_VAULT_PATH    : {self.obsidian_vault_path or "✗ 未配置"}')
+        print(f'  OBSIDIAN_VAULT_PATH    : {self.obsidian_vault_path or no + " 未配置"}')
 
     def save(self, data: dict):
         CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
