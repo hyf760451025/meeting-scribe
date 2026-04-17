@@ -241,7 +241,7 @@ class ASRClient:
 
     async def _recv_results(self, ws):
         """接收并解析识别结果"""
-        last_text = ''  # 去重：记录上一次推送的文字
+        last_interim = ''  # 上一次 interim 文字，用于去重
 
         async for raw in ws:
             if not self.running:
@@ -266,16 +266,23 @@ class ASRClient:
                     text = utt.get('text', '').strip()
                     if not text:
                         text = res.get('text', '').strip()
-                    if not text or text == last_text:
+                    if not text:
                         continue
-                    last_text = text
+
                     is_final = utt.get('definite', False)
-                    logger.info(f'ASR {"[final]" if is_final else "[interim]"}: {text}')
+
                     if is_final:
-                        last_text = ''  # final 后重置，下一句从头开始
+                        # final：无论是否重复都推送，然后重置 interim 记录
+                        logger.info(f'ASR [final]: {text}')
+                        last_interim = ''
                         self.on_final(text)
                     else:
-                        self.on_interim(text, 0)
+                        # interim：只有文字变化时才推送
+                        if text != last_interim:
+                            last_interim = text
+                            logger.info(f'ASR [interim]: {text}')
+                            self.on_interim(text, 0)
+
             except Exception as e:
                 logger.warning(f'解析结果异常: {e}')
 
