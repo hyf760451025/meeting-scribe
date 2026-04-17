@@ -97,7 +97,7 @@ async def handle_client(websocket):
                         template=config.summary_template,
                         api_key=config.ark_api_key,
                         base_url=config.ark_base_url,
-                        model=config.ark_endpoint_id,
+                        model=config.ark_model,
                     )
                     await push({'type': 'summary_result', 'text': summary})
                 except Exception as e:

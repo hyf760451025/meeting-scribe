@@ -55,9 +55,9 @@ class Config:
         self.volcengine_resource_id = 'volc.bigasr.sauc.duration'
 
         # 豆包 LLM（火山方舟）
-        self.ark_api_key    = ''
-        self.ark_endpoint_id = ''
-        self.ark_base_url   = 'https://ark.cn-beijing.volces.com/api/v3'
+        self.ark_api_key  = ''
+        self.ark_model    = ''
+        self.ark_base_url = 'https://ark.cn-beijing.volces.com/api/v3'
 
         # Obsidian
         self.obsidian_vault_path = ''
@@ -75,18 +75,18 @@ class Config:
             self.volcengine_app_id      = env.get('VOLCENGINE_APP_ID',      self.volcengine_app_id)
             self.volcengine_access_key  = env.get('VOLCENGINE_ACCESS_KEY',  self.volcengine_access_key)
             self.volcengine_resource_id = env.get('VOLCENGINE_RESOURCE_ID', self.volcengine_resource_id)
-            self.ark_api_key            = env.get('ARK_API_KEY',            self.ark_api_key)
-            self.ark_endpoint_id        = env.get('ARK_ENDPOINT_ID',        self.ark_endpoint_id)
-            self.ark_base_url           = env.get('ARK_BASE_URL',           self.ark_base_url)
+            self.ark_api_key  = env.get('ARK_API_KEY',  self.ark_api_key)
+            self.ark_model    = env.get('ARK_MODEL',    self.ark_model)
+            self.ark_base_url = env.get('ARK_BASE_URL', self.ark_base_url)
             self.obsidian_vault_path    = env.get('OBSIDIAN_VAULT_PATH',    self.obsidian_vault_path)
 
         # 2. 系统环境变量覆盖
         self.volcengine_app_id      = os.environ.get('VOLCENGINE_APP_ID',      self.volcengine_app_id)
         self.volcengine_access_key  = os.environ.get('VOLCENGINE_ACCESS_KEY',  self.volcengine_access_key)
         self.volcengine_resource_id = os.environ.get('VOLCENGINE_RESOURCE_ID', self.volcengine_resource_id)
-        self.ark_api_key            = os.environ.get('ARK_API_KEY',            self.ark_api_key)
-        self.ark_endpoint_id        = os.environ.get('ARK_ENDPOINT_ID',        self.ark_endpoint_id)
-        self.ark_base_url           = os.environ.get('ARK_BASE_URL',           self.ark_base_url)
+        self.ark_api_key  = os.environ.get('ARK_API_KEY',  self.ark_api_key)
+        self.ark_model    = os.environ.get('ARK_MODEL',    self.ark_model)
+        self.ark_base_url = os.environ.get('ARK_BASE_URL', self.ark_base_url)
         self.obsidian_vault_path    = os.environ.get('OBSIDIAN_VAULT_PATH',    self.obsidian_vault_path)
 
         # 3. config.json 兜底（UI 设置保存的地方）
@@ -107,7 +107,7 @@ class Config:
         print(f'  VOLCENGINE_ACCESS_KEY  : {"✓" if self.volcengine_access_key else "✗ 未配置"}')
         print(f'  VOLCENGINE_RESOURCE_ID : {self.volcengine_resource_id}')
         print(f'  ARK_API_KEY            : {"✓" if self.ark_api_key else "✗ 未配置"}')
-        print(f'  ARK_ENDPOINT_ID        : {"✓" if self.ark_endpoint_id else "✗ 未配置"}')
+        print(f'  ARK_MODEL              : {self.ark_model or "✗ 未配置"}')
         print(f'  ARK_BASE_URL           : {self.ark_base_url}')
         print(f'  OBSIDIAN_VAULT_PATH    : {self.obsidian_vault_path or "✗ 未配置"}')
 
