@@ -45,9 +45,13 @@ export default function App() {
         break
 
       case 'asr_interim':
-        // 实时中间结果（可能会更新）
-        setInterimText(msg.text)
-        setVolume(msg.volume ?? 0)
+        // text 有内容时更新字幕，为空时只更新音量（音量心跳包）
+        if (msg.text) {
+          setInterimText(msg.text)
+        }
+        if (msg.volume) {
+          setVolume(msg.volume)
+        }
         break
 
       case 'asr_final':
