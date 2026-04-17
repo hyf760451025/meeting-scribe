@@ -142,6 +142,147 @@ class ASRClient:
                 return
             volume = float(min(1.0, np.sqrt(np.mean(indata ** 2)) * 6))
             pcm = (indata * 32767).astype(np.int16).tobytes()
+            # 队列满时丢弃旧包，避免积压
+            if self._audio_queue.qsize() > 10:
+                try:
+                    self._audio_queue.get_nowait()
+                except Exception:
+                    pass
+            loop.call_soon_threadsafe(self._audio_queue.put_nowait, (pcm, volume))
+
+        logger.info(f'默认输入设备: {sd.query_devices(kind="input")["name"]}')
+
+        with sd.InputStream(
+            samplerate=SAMPLE_RATE,
+            channels=CHANNELS,
+            dtype='float32',
+            blocksize=CHUNK_SAMPLES,
+            callback=callback,
+        ):
+            while self.running:
+                await asyncio.sleep(0.05)
+
+    async def _asr_session(self):
+        """建立 WebSocket 会话并收发数据"""
+        connect_id = str(uuid.uuid4())
+
+        headers = {
+            'X-Api-App-Key':     self.app_id,
+            'X-Api-Access-Key':  self.access_key,
+            'X-Api-Resource-Id': self.resource_id,
+            'X-Api-Connect-Id':  connect_id,
+        }
+
+        init_payload = {
+            'user': {'uid': str(uuid.uuid4())},
+            'audio': {
+                'format':  'pcm',
+                'codec':   'raw',
+                'rate':    SAMPLE_RATE,
+                'bits':    16,
+                'channel': CHANNELS,
+            },
+            'request': {
+                'model_name':      'bigmodel',
+                'enable_itn':      True,
+                'enable_punc':     True,
+                'enable_ddc':      True,
+                'show_utterances': True,
+                'result_type':     'single',  # 增量返回，避免重复推同一句话
+            },
+        }
+
+        logger.info(f'ASR 连接参数: app_id={self.app_id[:4]}**** resource_id={self.resource_id}')
+        try:
+            async with ws_connect(
+                ASR_WS_URL,
+                extra_headers=headers,
+                ping_interval=20,
+                open_timeout=10,
+            ) as ws:
+                self._ws = ws
+                logger.info(f'豆包 ASR 已连接 [connect_id={connect_id}]')
+
+                await ws.send(_pack_json(init_payload))
+
+                await asyncio.gather(
+                    self._send_audio(ws),
+                    self._recv_results(ws),
+                )
+
+        except websockets.exceptions.ConnectionClosed as e:
+            if self.running:
+                logger.warning(f'ASR 连接关闭: {e}')
+        except Exception as e:
+            if self.running:
+                logger.error(f'ASR WebSocket 异常: {e}')
+                self.on_error(f'ASR 连接异常: {e}')
+
+    async def _send_audio(self, ws):
+        """持续从队列取音频发送"""
+        while self.running:
+            try:
+                pcm, volume = await asyncio.wait_for(
+                    self._audio_queue.get(), timeout=0.5
+                )
+                await ws.send(_pack_audio(pcm))
+                self.on_interim('', volume)
+            except asyncio.TimeoutError:
+                continue
+            except Exception as e:
+                if self.running:
+                    logger.error(f'发送音频异常: {e}')
+                break
+
+        try:
+            await ws.send(_pack_audio(b'', is_last=True))
+        except Exception:
+            pass
+
+    async def _recv_results(self, ws):
+        """接收并解析识别结果"""
+        last_text = ''  # 去重：记录上一次推送的文字
+
+        async for raw in ws:
+            if not self.running:
+                break
+            data = raw if isinstance(raw, bytes) else raw.encode()
+            result = _parse_response(data)
+            if not result:
+                continue
+
+            code = result.get('code', 0)
+            if code != 0 and code != 20000000:
+                msg = result.get('message', f'错误码 {code}')
+                logger.error(f'ASR 服务错误: {code} - {msg}')
+                if self.running:
+                    self.on_error(f'ASR 错误: {msg}')
+                continue
+
+            try:
+                res = result.get('result', {})
+                utterances = res.get('utterances', [])
+                for utt in utterances:
+                    text = utt.get('text', '').strip()
+                    if not text:
+                        text = res.get('text', '').strip()
+                    if not text or text == last_text:
+                        continue
+                    last_text = text
+                    is_final = utt.get('definite', False)
+                    logger.info(f'ASR {"[final]" if is_final else "[interim]"}: {text}')
+                    if is_final:
+                        last_text = ''  # final 后重置，下一句从头开始
+                        self.on_final(text)
+                    else:
+                        self.on_interim(text, 0)
+            except Exception as e:
+                logger.warning(f'解析结果异常: {e}')
+
+            if not self.running:
+                return
+            volume = float(min(1.0, np.sqrt(np.mean(indata ** 2)) * 6))
+            pcm = (indata * 32767).astype(np.int16).tobytes()
             loop.call_soon_threadsafe(self._audio_queue.put_nowait, (pcm, volume))
 
         # 打印可用音频设备，帮助排查
