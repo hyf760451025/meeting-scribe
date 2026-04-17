@@ -13,23 +13,44 @@ function startPython() {
     ? path.join(__dirname, '../python/main.py')
     : path.join(process.resourcesPath, 'python/main.py')
 
-  const python = process.platform === 'win32' ? 'python' : 'python3'
+  // Windows 上依次尝试 py / python / python3
+  const candidates = process.platform === 'win32'
+    ? ['py', 'python', 'python3']
+    : ['python3', 'python']
 
-  pythonProcess = spawn(python, [pythonPath], {
-    stdio: ['pipe', 'pipe', 'pipe'],
-  })
+  function tryNext(list) {
+    if (list.length === 0) {
+      console.error('[Python] 找不到 Python 可执行文件，请确认已安装 Python 并加入 PATH')
+      return
+    }
+    const cmd = list[0]
+    const proc = spawn(cmd, [pythonPath], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
 
-  pythonProcess.stdout.on('data', (data) => {
-    console.log('[Python]', data.toString())
-  })
+    proc.on('error', () => {
+      console.warn(`[Python] 命令 "${cmd}" 不可用，尝试下一个...`)
+      tryNext(list.slice(1))
+    })
 
-  pythonProcess.stderr.on('data', (data) => {
-    console.error('[Python Error]', data.toString())
-  })
+    proc.stdout.on('data', (data) => {
+      console.log('[Python]', data.toString().trim())
+    })
 
-  pythonProcess.on('close', (code) => {
-    console.log('[Python] 进程退出，code:', code)
-  })
+    proc.stderr.on('data', (data) => {
+      console.error('[Python Error]', data.toString().trim())
+    })
+
+    proc.on('close', (code) => {
+      if (code !== null) {
+        console.log(`[Python] 进程退出，code: ${code}`)
+      }
+    })
+
+    pythonProcess = proc
+  }
+
+  tryNext(candidates)
 }
 
 // ─── 创建主窗口 ─────────────────────────────────────────────────────────────
