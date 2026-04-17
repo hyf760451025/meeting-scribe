@@ -187,10 +187,10 @@ class ASRClient:
                 'model_name':        'bigmodel',
                 'enable_itn':        True,
                 'enable_punc':       True,
-                'enable_ddc':        True,
+                'enable_ddc':        False,  # 关闭顺滑，避免过滤语气词
                 'show_utterances':   True,
                 'result_type':       'single',
-                'enable_nonstream':  True,   # 开启二遍识别，async 接口才有文字输出
+                'enable_nonstream':  True,
             },
         }
 
