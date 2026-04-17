@@ -1,89 +1,88 @@
 """
-豆包 ASR 实时流式语音识别
-使用火山引擎大模型流式语音识别 API（WebSocket）
-文档：https://www.volcengine.com/docs/6561/xxx（大模型流式语音识别API）
+豆包大模型流式语音识别 (ASR)
+文档：https://www.volcengine.com/docs/6561/1354869
+接口：wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async（双向流式优化版）
 """
 
 import asyncio
+import gzip
 import json
 import logging
-import time
-import uuid
-import gzip
 import struct
+import uuid
+from typing import Callable, Optional
+
 import numpy as np
 import sounddevice as sd
-from websockets.client import connect as ws_connect
 import websockets.exceptions
-from typing import Callable, Optional
+from websockets.client import connect as ws_connect
 
 logger = logging.getLogger('asr')
 
-# ─── 豆包 ASR 配置 ────────────────────────────────────────────────────────────
-ASR_WS_URL = 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel'
-SAMPLE_RATE = 16000       # 采样率 16kHz
-CHANNELS = 1              # 单声道
-CHUNK_MS = 100            # 每次发送 100ms 音频
-CHUNK_SAMPLES = int(SAMPLE_RATE * CHUNK_MS / 1000)  # = 1600 samples
+# ─── 接口地址 ─────────────────────────────────────────────────────────────────
+# 双向流式优化版（推荐，性能最优）
+ASR_WS_URL = 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async'
 
-# 协议常量（参考豆包 ASR 文档）
-PROTOCOL_VERSION = 0b0001
-DEFAULT_HEADER_SIZE = 0b0001
-FULL_CLIENT_REQUEST = 0b0001
-AUDIO_ONLY_REQUEST = 0b0010
-FULL_SERVER_RESPONSE = 0b1001
-LAST_MESSAGE_TYPE_SPECIFIC_FLAG = 0b0010
-POSITIVE_SEQUENCE = 0b0000
-NEG_SEQUENCE_WITH_TRANS = 0b0011
-JSON_SERIALIZATION = 0b0001
-GZIP_COMPRESSION = 0b0001
-NO_COMPRESSION = 0b0000
+# ─── 音频参数 ─────────────────────────────────────────────────────────────────
+SAMPLE_RATE   = 16000
+CHANNELS      = 1
+CHUNK_MS      = 200   # 文档推荐双向流式用 200ms
+CHUNK_SAMPLES = int(SAMPLE_RATE * CHUNK_MS / 1000)  # 3200 samples
 
-
-def _build_header(
-    msg_type: int,
-    msg_type_specific_flags: int = 0,
-    serial_method: int = JSON_SERIALIZATION,
-    compression_type: int = GZIP_COMPRESSION,
-    reserved_data: int = 0x00,
-) -> bytes:
-    """构建 4 字节消息头"""
-    header = bytearray(4)
-    header[0] = (PROTOCOL_VERSION << 4) | DEFAULT_HEADER_SIZE
-    header[1] = (msg_type << 4) | msg_type_specific_flags
-    header[2] = (serial_method << 4) | compression_type
-    header[3] = reserved_data
-    return bytes(header)
+# ─── 二进制协议常量 ───────────────────────────────────────────────────────────
+PROTOCOL_VERSION    = 0b0001
+HEADER_SIZE         = 0b0001   # 4 bytes
+MSG_FULL_CLIENT_REQ = 0b0001
+MSG_AUDIO_ONLY_REQ  = 0b0010
+MSG_FULL_SERVER_RSP = 0b1001
+MSG_ERROR           = 0b1111
+FLAG_LAST_PACKAGE   = 0b0010
+SERIAL_JSON         = 0b0001
+SERIAL_NONE         = 0b0000
+COMPRESS_GZIP       = 0b0001
+COMPRESS_NONE       = 0b0000
 
 
-def _pack_request(payload: dict, msg_type: int = FULL_CLIENT_REQUEST) -> bytes:
-    """打包 JSON 请求"""
-    payload_bytes = json.dumps(payload, ensure_ascii=False).encode('utf-8')
-    compressed = gzip.compress(payload_bytes)
-    header = _build_header(msg_type)
-    size = struct.pack('>I', len(compressed))
-    return header + size + compressed
+def _make_header(msg_type: int, flags: int = 0,
+                 serial: int = SERIAL_JSON,
+                 compress: int = COMPRESS_GZIP) -> bytes:
+    h = bytearray(4)
+    h[0] = (PROTOCOL_VERSION << 4) | HEADER_SIZE
+    h[1] = (msg_type << 4) | flags
+    h[2] = (serial << 4) | compress
+    h[3] = 0x00
+    return bytes(h)
 
 
-def _pack_audio(audio_bytes: bytes) -> bytes:
-    """打包音频数据"""
-    header = _build_header(
-        AUDIO_ONLY_REQUEST,
-        compression_type=NO_COMPRESSION,
-    )
-    size = struct.pack('>I', len(audio_bytes))
-    return header + size + audio_bytes
+def _pack_json(payload: dict, msg_type: int = MSG_FULL_CLIENT_REQ) -> bytes:
+    """打包 JSON payload（gzip 压缩）"""
+    data = gzip.compress(json.dumps(payload, ensure_ascii=False).encode('utf-8'))
+    return _make_header(msg_type) + struct.pack('>I', len(data)) + data
 
 
-def _parse_response(data: bytes) -> dict:
-    """解析服务端响应"""
+def _pack_audio(pcm_bytes: bytes, is_last: bool = False) -> bytes:
+    """打包音频数据（不压缩）"""
+    flags = FLAG_LAST_PACKAGE if is_last else 0
+    header = _make_header(MSG_AUDIO_ONLY_REQ, flags=flags,
+                          serial=SERIAL_NONE, compress=COMPRESS_NONE)
+    return header + struct.pack('>I', len(pcm_bytes)) + pcm_bytes
+
+
+def _parse_response(data: bytes) -> Optional[dict]:
+    """解析服务端响应，返回 JSON dict 或 None"""
     if len(data) < 4:
-        return {}
+        return None
     msg_type = (data[1] >> 4) & 0x0F
-    compression = data[2] & 0x0F
-    payload = data[8:]  # 跳过 4 字节头 + 4 字节长度
+    compress  = data[2] & 0x0F
 
-    if compression == GZIP_COMPRESSION:
+    # full server response：header(4) + sequence(4) + size(4) + payload
+    # error response：header(4) + error_code(4) + size(4) + payload
+    if msg_type in (MSG_FULL_SERVER_RSP, MSG_ERROR):
+        payload = data[12:]   # 跳过 header + sequence/error_code + size
+    else:
+        payload = data[8:]    # 跳过 header + size
+
+    if compress == COMPRESS_GZIP:
         try:
             payload = gzip.decompress(payload)
         except Exception:
@@ -92,29 +91,30 @@ def _parse_response(data: bytes) -> dict:
     try:
         return json.loads(payload.decode('utf-8'))
     except Exception:
-        return {}
+        return None
 
 
 class ASRClient:
     def __init__(
         self,
         app_id: str,
-        token: str,
+        access_key: str,
+        resource_id: str,
         on_interim: Callable[[str, float], None],
         on_final: Callable[[str], None],
         on_error: Callable[[str], None],
     ):
-        self.app_id = app_id
-        self.token = token
-        self.on_interim = on_interim
-        self.on_final = on_final
-        self.on_error = on_error
-        self.running = False
+        self.app_id      = app_id
+        self.access_key  = access_key
+        self.resource_id = resource_id
+        self.on_interim  = on_interim
+        self.on_final    = on_final
+        self.on_error    = on_error
+        self.running     = False
         self._audio_queue: asyncio.Queue = asyncio.Queue()
-        self._ws: Optional[websockets.WebSocketClientProtocol] = None
+        self._ws = None
 
     async def start(self):
-        """启动 ASR：开始录音 + 建立 WebSocket 连接"""
         self.running = True
         try:
             await asyncio.gather(
@@ -123,10 +123,10 @@ class ASRClient:
             )
         except Exception as e:
             logger.error(f'ASR 启动异常: {e}')
-            self.on_error(str(e))
+            if self.running:
+                self.on_error(str(e))
 
     async def stop(self):
-        """停止 ASR"""
         self.running = False
         if self._ws:
             try:
@@ -135,21 +135,15 @@ class ASRClient:
                 pass
 
     async def _record_audio(self):
-        """从麦克风录制音频，放入队列"""
+        """从麦克风录制音频放入队列"""
         loop = asyncio.get_event_loop()
 
         def callback(indata, frames, time_info, status):
             if not self.running:
                 return
-            # 计算音量（0~1）
-            volume = float(np.sqrt(np.mean(indata ** 2))) * 5
-            volume = min(1.0, volume)
-            # 转换为 16-bit PCM bytes
-            audio_bytes = (indata * 32767).astype(np.int16).tobytes()
-            loop.call_soon_threadsafe(
-                self._audio_queue.put_nowait,
-                (audio_bytes, volume),
-            )
+            volume = float(min(1.0, np.sqrt(np.mean(indata ** 2)) * 6))
+            pcm = (indata * 32767).astype(np.int16).tobytes()
+            loop.call_soon_threadsafe(self._audio_queue.put_nowait, (pcm, volume))
 
         with sd.InputStream(
             samplerate=SAMPLE_RATE,
@@ -162,34 +156,36 @@ class ASRClient:
                 await asyncio.sleep(0.05)
 
     async def _asr_session(self):
-        """建立与豆包 ASR 的 WebSocket 会话"""
-        uid = str(uuid.uuid4())
+        """建立 WebSocket 会话并收发数据"""
+        connect_id = str(uuid.uuid4())
+
+        # 文档要求的鉴权 Header
         headers = {
-            'Authorization': f'Bearer; {self.token}',
+            'X-Api-App-Key':    self.app_id,
+            'X-Api-Access-Key': self.access_key,
+            'X-Api-Resource-Id': self.resource_id,
+            'X-Api-Connect-Id': connect_id,
         }
 
-        # 初始请求 payload
+        # Full client request payload
         init_payload = {
-            'app': {
-                'appid': self.app_id,
-                'token': self.token,
-                'cluster': 'volcengine_streaming_common',
-            },
-            'user': {'uid': uid},
-            'request': {
-                'reqid': str(uuid.uuid4()),
-                'sequence': 1,
-                'nbest': 1,
-                'show_utterances': True,
-                'result_type': 'full',
+            'user': {
+                'uid': str(uuid.uuid4()),
             },
             'audio': {
-                'format': 'raw',
-                'codec': 'raw',
-                'rate': SAMPLE_RATE,
-                'bits': 16,
+                'format':  'raw',
+                'codec':   'raw',
+                'rate':    SAMPLE_RATE,
+                'bits':    16,
                 'channel': CHANNELS,
-                'language': 'zh-CN',
+            },
+            'request': {
+                'model_name':      'bigmodel',
+                'enable_itn':      True,
+                'enable_punc':     True,
+                'enable_ddc':      True,
+                'show_utterances': True,
+                'result_type':     'single',  # 增量返回，适合实时显示
             },
         }
 
@@ -198,32 +194,37 @@ class ASRClient:
                 ASR_WS_URL,
                 additional_headers=headers,
                 ping_interval=20,
+                open_timeout=10,
             ) as ws:
                 self._ws = ws
-                logger.info('豆包 ASR WebSocket 已连接')
+                logger.info(f'豆包 ASR 已连接 [connect_id={connect_id}]')
 
                 # 发送初始化请求
-                await ws.send(_pack_request(init_payload))
+                await ws.send(_pack_json(init_payload))
 
                 # 并发：发送音频 + 接收结果
                 await asyncio.gather(
                     self._send_audio(ws),
-                    self._receive_results(ws),
+                    self._recv_results(ws),
                 )
+
+        except websockets.exceptions.ConnectionClosed as e:
+            if self.running:
+                logger.warning(f'ASR 连接关闭: {e}')
         except Exception as e:
             if self.running:
                 logger.error(f'ASR WebSocket 异常: {e}')
                 self.on_error(f'ASR 连接异常: {e}')
 
     async def _send_audio(self, ws):
-        """持续从队列取音频并发送"""
+        """持续从队列取音频发送"""
         while self.running:
             try:
-                audio_bytes, volume = await asyncio.wait_for(
+                pcm, volume = await asyncio.wait_for(
                     self._audio_queue.get(), timeout=0.5
                 )
-                await ws.send(_pack_audio(audio_bytes))
-                # 同时推送音量给前端（通过 on_interim 的 volume 参数）
+                await ws.send(_pack_audio(pcm))
+                # 同步推送音量给前端（text 为空仅更新音量）
                 self.on_interim('', volume)
             except asyncio.TimeoutError:
                 continue
@@ -232,34 +233,41 @@ class ASRClient:
                     logger.error(f'发送音频异常: {e}')
                 break
 
-    async def _receive_results(self, ws):
-        """接收 ASR 识别结果"""
-        current_utterance = ''
+        # 停止时发送最后一包（空音频 + last flag）
+        try:
+            await ws.send(_pack_audio(b'', is_last=True))
+        except Exception:
+            pass
 
+    async def _recv_results(self, ws):
+        """接收并解析识别结果"""
         async for raw in ws:
             if not self.running:
                 break
-            result = _parse_response(raw if isinstance(raw, bytes) else raw.encode())
+            data = raw if isinstance(raw, bytes) else raw.encode()
+            result = _parse_response(data)
+            if not result:
+                continue
 
-            # 解析识别结果
+            # 检查错误码
+            code = result.get('code', 0)
+            if code != 0 and code != 20000000:
+                msg = result.get('message', f'错误码 {code}')
+                logger.error(f'ASR 服务错误: {code} - {msg}')
+                if self.running:
+                    self.on_error(f'ASR 错误: {msg}')
+                continue
+
             try:
                 utterances = result.get('result', {}).get('utterances', [])
                 for utt in utterances:
                     text = utt.get('text', '').strip()
-                    is_final = utt.get('definite', False)
-
                     if not text:
                         continue
-
+                    is_final = utt.get('definite', False)
                     if is_final:
-                        # 最终结果
-                        if text != current_utterance:
-                            self.on_final(text)
-                            current_utterance = text
+                        self.on_final(text)
                     else:
-                        # 中间结果（实时显示）
                         self.on_interim(text, 0)
-                        current_utterance = text
-
             except Exception as e:
-                logger.debug(f'解析结果异常: {e}, raw: {result}')
+                logger.debug(f'解析结果异常: {e}')

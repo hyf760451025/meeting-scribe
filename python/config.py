@@ -52,8 +52,9 @@ def _load_env_file(path: Path) -> dict:
 class Config:
     def __init__(self):
         # 默认值
-        self.volcengine_app_id = ''
-        self.volcengine_token = ''
+        self.volcengine_app_id   = ''
+        self.volcengine_access_key = ''
+        self.volcengine_resource_id = 'volc.bigasr.sauc.duration'  # 默认小时版
         self.llm_api_key = ''
         self.llm_base_url = 'https://ark.cn-beijing.volces.com/api/v3'
         self.llm_model = 'doubao-pro-32k'
@@ -67,16 +68,18 @@ class Config:
         env = _load_env_file(ENV_FILE)
         if env:
             print(f'[Config] 从 .env 文件加载配置: {ENV_FILE}')
-            self.volcengine_app_id  = env.get('VOLCENGINE_APP_ID', self.volcengine_app_id)
-            self.volcengine_token   = env.get('VOLCENGINE_TOKEN', self.volcengine_token)
+            self.volcengine_app_id    = env.get('VOLCENGINE_APP_ID', self.volcengine_app_id)
+            self.volcengine_access_key = env.get('VOLCENGINE_ACCESS_KEY', self.volcengine_access_key)
+            self.volcengine_resource_id = env.get('VOLCENGINE_RESOURCE_ID', self.volcengine_resource_id)
             self.llm_api_key        = env.get('LLM_API_KEY', self.llm_api_key)
             self.llm_base_url       = env.get('LLM_BASE_URL', self.llm_base_url)
             self.llm_model          = env.get('LLM_MODEL', self.llm_model)
             self.obsidian_vault_path = env.get('OBSIDIAN_VAULT_PATH', self.obsidian_vault_path)
 
         # 2. 再从系统环境变量读（CI/生产环境用）
-        self.volcengine_app_id  = os.environ.get('VOLCENGINE_APP_ID', self.volcengine_app_id)
-        self.volcengine_token   = os.environ.get('VOLCENGINE_TOKEN', self.volcengine_token)
+        self.volcengine_app_id    = os.environ.get('VOLCENGINE_APP_ID', self.volcengine_app_id)
+        self.volcengine_access_key = os.environ.get('VOLCENGINE_ACCESS_KEY', self.volcengine_access_key)
+        self.volcengine_resource_id = os.environ.get('VOLCENGINE_RESOURCE_ID', self.volcengine_resource_id)
         self.llm_api_key        = os.environ.get('LLM_API_KEY', self.llm_api_key)
         self.llm_base_url       = os.environ.get('LLM_BASE_URL', self.llm_base_url)
         self.llm_model          = os.environ.get('LLM_MODEL', self.llm_model)
@@ -97,8 +100,9 @@ class Config:
     def _print_status(self):
         """启动时打印配置状态，方便排查问题"""
         print('[Config] 配置加载完成:')
-        print(f'  VOLCENGINE_APP_ID  : {"✓ 已配置" if self.volcengine_app_id else "✗ 未配置"}')
-        print(f'  VOLCENGINE_TOKEN   : {"✓ 已配置" if self.volcengine_token else "✗ 未配置"}')
+        print(f'  VOLCENGINE_APP_ID    : {"✓ 已配置" if self.volcengine_app_id else "✗ 未配置"}')
+        print(f'  VOLCENGINE_ACCESS_KEY: {"✓ 已配置" if self.volcengine_access_key else "✗ 未配置"}')
+        print(f'  VOLCENGINE_RESOURCE_ID: {self.volcengine_resource_id}')
         print(f'  LLM_API_KEY        : {"✓ 已配置" if self.llm_api_key else "✗ 未配置"}')
         print(f'  LLM_BASE_URL       : {self.llm_base_url}')
         print(f'  LLM_MODEL          : {self.llm_model}')

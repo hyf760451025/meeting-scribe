@@ -64,7 +64,8 @@ async def handle_client(websocket):
                 logger.info('开始录音...')
                 asr_client = ASRClient(
                     app_id=config.volcengine_app_id,
-                    token=config.volcengine_token,
+                    access_key=config.volcengine_access_key,
+                    resource_id=config.volcengine_resource_id,
                     on_interim=lambda text, vol: asyncio.create_task(
                         push({'type': 'asr_interim', 'text': text, 'volume': vol})
                     ),
