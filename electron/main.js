@@ -1,26 +1,73 @@
-const { app, BrowserWindow, Menu, ipcMain, shell } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain } = require('electron')
 const path = require('path')
-const { spawn } = require('child_process')
+const { spawn, execSync } = require('child_process')
+const net = require('net')
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 
 let mainWindow = null
 let pythonProcess = null
 
-// ─── 启动 Python 后端 ───────────────────────────────────────────────────────
+// ─── 端口检查 & 清理 ─────────────────────────────────────────────────────────
+function isPortInUse(port) {
+  return new Promise((resolve) => {
+    const server = net.createServer()
+    server.once('error', () => resolve(true))
+    server.once('listening', () => {
+      server.close()
+      resolve(false)
+    })
+    server.listen(port, '127.0.0.1')
+  })
+}
+
+function killPortWin(port) {
+  try {
+    const result = execSync(
+      `netstat -ano | findstr :${port}`,
+      { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
+    )
+    const pids = new Set()
+    result.split('\n').forEach((line) => {
+      const match = line.trim().match(/(\d+)$/)
+      if (match) pids.add(match[1])
+    })
+    pids.forEach((pid) => {
+      try {
+        execSync(`taskkill /PID ${pid} /F`, { stdio: 'ignore' })
+        console.log(`[Main] 已清理端口 ${port} 占用进程 PID=${pid}`)
+      } catch {}
+    })
+  } catch {}
+}
+
+async function cleanupPorts() {
+  const ports = [8766, 8767]
+  for (const port of ports) {
+    if (await isPortInUse(port)) {
+      console.log(`[Main] 端口 ${port} 被占用，尝试清理...`)
+      if (process.platform === 'win32') {
+        killPortWin(port)
+      }
+      // 等待端口释放
+      await new Promise((r) => setTimeout(r, 500))
+    }
+  }
+}
+
+// ─── 启动 Python 后端 ────────────────────────────────────────────────────────
 function startPython() {
   const pythonPath = isDev
     ? path.join(__dirname, '../python/main.py')
     : path.join(process.resourcesPath, 'python/main.py')
 
-  // Windows 上依次尝试 py / python / python3
   const candidates = process.platform === 'win32'
     ? ['py', 'python', 'python3']
     : ['python3', 'python']
 
   function tryNext(list) {
     if (list.length === 0) {
-      console.error('[Python] 找不到 Python 可执行文件，请确认已安装 Python 并加入 PATH')
+      console.error('[Python] 找不到 Python，请确认已安装并加入 PATH')
       return
     }
     const cmd = list[0]
@@ -29,7 +76,7 @@ function startPython() {
     })
 
     proc.on('error', () => {
-      console.warn(`[Python] 命令 "${cmd}" 不可用，尝试下一个...`)
+      console.warn(`[Python] "${cmd}" 不可用，尝试下一个...`)
       tryNext(list.slice(1))
     })
 
@@ -53,7 +100,20 @@ function startPython() {
   tryNext(candidates)
 }
 
-// ─── 创建主窗口 ─────────────────────────────────────────────────────────────
+function killPython() {
+  if (pythonProcess) {
+    try {
+      if (process.platform === 'win32') {
+        execSync(`taskkill /PID ${pythonProcess.pid} /T /F`, { stdio: 'ignore' })
+      } else {
+        pythonProcess.kill('SIGTERM')
+      }
+    } catch {}
+    pythonProcess = null
+  }
+}
+
+// ─── 创建主窗口 ──────────────────────────────────────────────────────────────
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 720,
@@ -63,7 +123,7 @@ function createWindow() {
     frame: false,
     transparent: true,
     alwaysOnTop: true,
-    resizable: false,          // 禁止 resize，避免拖拽时窗口变大
+    resizable: false,
     skipTaskbar: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -72,21 +132,18 @@ function createWindow() {
     },
   })
 
-  // 开发模式加载 Vite dev server，生产模式加载打包文件
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173')
-    // mainWindow.webContents.openDevTools({ mode: 'detach' })
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
   }
 
-  // 注册右键菜单
   mainWindow.webContents.on('context-menu', () => {
     buildContextMenu().popup({ window: mainWindow })
   })
 }
 
-// ─── 右键菜单 ───────────────────────────────────────────────────────────────
+// ─── 右键菜单 ────────────────────────────────────────────────────────────────
 function buildContextMenu() {
   return Menu.buildFromTemplate([
     {
@@ -120,15 +177,15 @@ function buildContextMenu() {
 }
 
 // ─── IPC 通信 ────────────────────────────────────────────────────────────────
-// 获取窗口大小
 ipcMain.handle('get-window-size', () => {
   return mainWindow?.getSize() ?? [720, 160]
 })
 
 // ─── App 生命周期 ────────────────────────────────────────────────────────────
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // 先清理可能残留的端口占用
+  await cleanupPorts()
   startPython()
-  // 等待 Python 启动
   setTimeout(createWindow, 1500)
 
   app.on('activate', () => {
@@ -137,14 +194,10 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
-  if (pythonProcess) {
-    pythonProcess.kill()
-  }
+  killPython()
   if (process.platform !== 'darwin') app.quit()
 })
 
 app.on('before-quit', () => {
-  if (pythonProcess) {
-    pythonProcess.kill()
-  }
+  killPython()
 })
