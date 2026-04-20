@@ -119,12 +119,13 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 720,
     height: 160,
-    minWidth: 400,
-    minHeight: 100,
+    minWidth: 360,
+    minHeight: 80,
+    maxHeight: 600,
     frame: false,
     transparent: true,
     alwaysOnTop: true,
-    resizable: false,
+    resizable: true,           // 开启边框拖拽调整大小
     skipTaskbar: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
