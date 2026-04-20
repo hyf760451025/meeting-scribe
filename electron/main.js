@@ -146,8 +146,13 @@ function createWindow() {
 
 // ─── 系统托盘 ────────────────────────────────────────────────────────────────
 function createTray() {
-  // 用一个 1x1 的空图标，Windows 托盘需要图标
-  const icon = nativeImage.createEmpty()
+  const iconPath = isDev
+    ? path.join(__dirname, '../assets/tray-icon.png')
+    : path.join(process.resourcesPath, 'assets/tray-icon.png')
+
+  let icon = nativeImage.createFromPath(iconPath)
+  icon = icon.resize({ width: 16, height: 16 })
+
   tray = new Tray(icon)
   tray.setToolTip('MeetingScribe')
 

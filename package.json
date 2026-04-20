@@ -41,10 +41,8 @@
       "target": "dmg"
     },
     "extraResources": [
-      {
-        "from": "python",
-        "to": "python"
-      }
+      { "from": "python", "to": "python" },
+      { "from": "assets", "to": "assets" }
     ]
   }
 }
