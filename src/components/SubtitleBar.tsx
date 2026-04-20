@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import type { AppStatus, Message } from '../App'
 import Waveform from './Waveform'
+import { loadSettings } from './SettingsModal'
 
 interface SubtitleBarProps {
   status: AppStatus
@@ -88,8 +89,11 @@ export default function SubtitleBar({
           {/* 最小化到托盘（黄色） */}
           <button
             data-no-drag
-            onClick={() => window.electronAPI?.minimizeWindow()}
-            title="最小化到托盘"
+            onClick={() => {
+              const behavior = loadSettings().minimizeBehavior
+              window.electronAPI?.minimizeWindow(behavior)
+            }}
+            title={loadSettings().minimizeBehavior === 'tray' ? '最小化到托盘' : '最小化到任务栏'}
             className="w-3 h-3 rounded-full bg-yellow-400/80 hover:bg-yellow-400 transition-colors flex items-center justify-center group"
           >
             <span className="hidden group-hover:block text-[8px] text-yellow-900 leading-none font-bold">–</span>

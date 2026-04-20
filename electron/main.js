@@ -154,7 +154,7 @@ function createTray() {
   icon = icon.resize({ width: 16, height: 16 })
 
   tray = new Tray(icon)
-  tray.setToolTip('MeetingScribe')
+  tray.setToolTip('聆听')
 
   const trayMenu = Menu.buildFromTemplate([
     {
@@ -211,7 +211,20 @@ function buildContextMenu() {
     },
     {
       label: '─  最小化',
-      click: () => mainWindow?.minimize(),
+      click: () => {
+        // 读取前端存的设置
+        mainWindow?.webContents.executeJavaScript(
+          `localStorage.getItem('linging-settings')`
+        ).then(stored => {
+          let behavior = 'tray'
+          try { behavior = JSON.parse(stored)?.minimizeBehavior ?? 'tray' } catch {}
+          if (behavior === 'tray') {
+            mainWindow?.hide()
+          } else {
+            mainWindow?.minimize()
+          }
+        }).catch(() => mainWindow?.hide())
+      },
     },
     { type: 'separator' },
     {
@@ -226,12 +239,24 @@ ipcMain.handle('get-window-size', () => {
   return mainWindow?.getSize() ?? [720, 160]
 })
 
-ipcMain.on('minimize-window', () => {
-  mainWindow?.hide()  // 隐藏到托盘，不是任务栏最小化
+ipcMain.on('minimize-window', (_, behavior) => {
+  // behavior 由前端设置决定：'tray' 或 'taskbar'
+  const action = behavior ?? 'tray'
+  if (action === 'tray') {
+    mainWindow?.hide()
+  } else {
+    mainWindow?.minimize()
+  }
 })
 
 ipcMain.on('close-window', () => {
   app.quit()
+})
+
+ipcMain.on('set-opacity', (_, opacity) => {
+  if (mainWindow) {
+    mainWindow.setOpacity(opacity)
+  }
 })
 
 // ─── App 生命周期 ────────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 {
-  "name": "meeting-scribe",
+  "name": "linging",
   "version": "1.0.0",
-  "description": "实时会议转写 + 智能总结桌面工具",
+  "description": "聆听 - 实时会议转写 + 智能总结桌面工具",
   "main": "electron/main.js",
   "scripts": {
     "dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
@@ -29,8 +29,8 @@
     "wait-on": "^7.2.0"
   },
   "build": {
-    "appId": "com.meetingscribe.app",
-    "productName": "MeetingScribe",
+    "appId": "com.linging.app",
+    "productName": "聆听",
     "directories": {
       "output": "dist-electron"
     },
