@@ -13,6 +13,7 @@ export interface Message {
   text: string
   isFinal: boolean
   timestamp: number
+  speakerId: number  // 说话人 ID，0 表示未知
 }
 
 export interface Session {
@@ -27,6 +28,7 @@ export default function App() {
   const [sessions, setSessions] = useState<Session[]>([])       // 所有录制段
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null) // 当前录制段 ID
   const [interimText, setInterimText] = useState('')
+  const [interimSpeakerId, setInterimSpeakerId] = useState(0)
   const [summary, setSummary] = useState('')
   const [showSummary, setShowSummary] = useState(false)
   const [showTranscript, setShowTranscript] = useState(false)
@@ -73,16 +75,19 @@ export default function App() {
       case 'asr_interim':
         if (msg.text) setInterimText(msg.text)
         if (msg.volume) setVolume(msg.volume)
+        if (msg.speaker_id !== undefined) setInterimSpeakerId(msg.speaker_id)
         break
 
       case 'asr_final':
         setInterimText('')
+        setInterimSpeakerId(0)
         if (msg.text?.trim()) {
           appendMessage({
             id: Date.now().toString(),
             text: msg.text,
             isFinal: true,
             timestamp: Date.now(),
+            speakerId: msg.speaker_id ?? 0,
           })
         }
         break
@@ -177,6 +182,7 @@ export default function App() {
         status={status}
         messages={currentMessages}
         interimText={interimText}
+        interimSpeakerId={interimSpeakerId}
         volume={volume}
         connected={connected}
         onStart={handleStart}

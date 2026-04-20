@@ -107,9 +107,9 @@ class ASRClient:
         self.app_id      = app_id
         self.access_key  = access_key
         self.resource_id = resource_id
-        self.on_interim  = on_interim
-        self.on_final    = on_final
-        self.on_error    = on_error
+        self.on_interim  = on_interim   # (text, volume, speaker_id)
+        self.on_final    = on_final     # (text, speaker_id)
+        self.on_error    = on_error     # (error_msg)
         self.running     = False
         self._audio_queue: asyncio.Queue = asyncio.Queue()
         self._ws = None
@@ -184,13 +184,15 @@ class ASRClient:
                 'channel': CHANNELS,
             },
             'request': {
-                'model_name':        'bigmodel',
-                'enable_itn':        True,
-                'enable_punc':       True,
-                'enable_ddc':        False,  # 关闭顺滑，避免过滤语气词
-                'show_utterances':   True,
-                'result_type':       'single',
-                'enable_nonstream':  True,
+                'model_name':          'bigmodel',
+                'enable_itn':          True,
+                'enable_punc':         True,
+                'enable_ddc':          False,
+                'show_utterances':     True,
+                'result_type':         'single',
+                'enable_nonstream':    True,
+                'enable_speaker_info': True,   # 开启说话人分离
+                'ssd_version':         '200',  # 大模型 SSD
             },
         }
 
@@ -274,18 +276,19 @@ class ASRClient:
                         continue
 
                     is_final = utt.get('definite', False)
+                    speaker_id = utt.get('speaker_id', 0)  # 说话人 ID，0 表示未知
 
                     if is_final:
                         if text != last_final_text:
                             last_final_text = text
                             last_interim_text = ''
-                            logger.info(f'ASR [final]: {text}')
-                            self.on_final(text)
+                            logger.info(f'ASR [final] Speaker{speaker_id}: {text}')
+                            self.on_final(text, speaker_id)
                     else:
                         if text != last_interim_text:
                             last_interim_text = text
-                            logger.info(f'ASR [interim]: {text}')
-                            self.on_interim(text, 0)
+                            logger.info(f'ASR [interim] Speaker{speaker_id}: {text}')
+                            self.on_interim(text, 0, speaker_id)
 
             except Exception as e:
                 logger.warning(f'解析结果异常: {e}')

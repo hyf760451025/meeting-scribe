@@ -75,11 +75,11 @@ async def handle_client(websocket):
                     app_id=config.volcengine_app_id,
                     access_key=config.volcengine_access_key,
                     resource_id=config.volcengine_resource_id,
-                    on_interim=lambda text, vol: asyncio.create_task(
-                        push({'type': 'asr_interim', 'text': text, 'volume': vol})
+                    on_interim=lambda text, vol, spk=0: asyncio.create_task(
+                        push({'type': 'asr_interim', 'text': text, 'volume': vol, 'speaker_id': spk})
                     ),
-                    on_final=lambda text: asyncio.create_task(
-                        push({'type': 'asr_final', 'text': text})
+                    on_final=lambda text, spk=0: asyncio.create_task(
+                        push({'type': 'asr_final', 'text': text, 'speaker_id': spk})
                     ),
                     on_error=lambda err: asyncio.create_task(
                         push({'type': 'error', 'message': err})
